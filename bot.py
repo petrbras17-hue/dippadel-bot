@@ -309,6 +309,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     get_or_create_user(user.id, user.username, user.first_name, user.last_name)
 
+    # Deep link: /start book → go straight to booking
+    if context.args and context.args[0] == "book":
+        return await booking_start(update, context)
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("Забронировать корт", callback_data="menu_book")],
         [InlineKeyboardButton("Мои бронирования", callback_data="menu_mybookings")],
@@ -319,8 +323,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ])
 
     await update.message.reply_text(
-        "Добро пожаловать в THE DIP PADEL!\n"
-        "Николина Гора\n\n"
+        "Добро пожаловать в DIP PADEL! 🎾\n"
+        "Николина Гора, берег Москвы-реки\n\n"
         "Выберите действие:",
         reply_markup=keyboard,
     )
@@ -563,6 +567,21 @@ async def booking_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"Напоминание придёт за 2 часа.\n"
         f"Отмена: /cancel"
     )
+
+    # Notify admins
+    admin_text = (
+        f"🎾 Новое бронирование #{booking_id}\n\n"
+        f"Клиент: {user.first_name or ''} {user.last_name or ''}"
+        f"{' @' + user.username if user.username else ''}\n"
+        f"Дата: {format_date(data['booking_date'])}\n"
+        f"Время: {data['booking_start']} - {data['booking_end']}\n"
+        f"Стоимость: {data['booking_price']:,} руб"
+    )
+    for aid in ADMIN_IDS:
+        try:
+            await context.bot.send_message(chat_id=aid, text=admin_text)
+        except Exception as exc:
+            logger.error("Failed to notify admin %s: %s", aid, exc)
 
     # Clean up user_data
     for key in list(data.keys()):
